@@ -1,0 +1,9 @@
+[Unit]
+Description=Mailifier allows local programs to push notifications to a user via E-Mail
+
+[Service]
+ExecStart=/usr/bin/python3 /usr/sbin/mailifier
+Environment=PYTHONUNBUFFERED=1
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,47 @@
+#!/usr/bin/env python3
+
+import argparse
+import configparser
+import os
+import stat
+
+DEFAULT_CONFIG_PATH = '/etc/mailifier/mailifier.conf'
+
+if __name__ == '__main__':
+	# Parse comannd line arguments
+    parser = argparse.ArgumentParser()
+    parser.add_argument('-c', '--config', help='Path to the Mailifier configuration file (default: ' + DEFAULT_CONFIG_PATH + ')')
+    parser.add_argument('-s', '--subject', help='Subject of the notification mail', required=True)
+    parser.add_argument('-b','--body', help='Body of the notification mail', required=True)
+    args = parser.parse_args()
+
+    config_path = ''
+
+    if args.config:
+        print('Loading config from:', args.config)
+        config_path = args.config
+    else:
+        print('Loading default config from:', DEFAULT_CONFIG_PATH)
+        config_path = DEFAULT_CONFIG_PATH
+
+    if not os.path.exists(config_path) or not os.path.isfile(config_path):
+        print('ERROR: configuration file does not exist or is not a file!')
+        exit(1)
+
+    config = configparser.ConfigParser()
+    config.read(config_path)
+    pipe_path = config['SERVICE']['PIPE_PATH']
+    print('Found pipe location in configuration:', pipe_path)
+
+    if not os.path.exists(pipe_path) or not stat.S_ISFIFO(os.stat(pipe_path).st_mode):
+        print('ERROR: pipe does not exist or is not of type pipe!')
+        exit(1)
+
+    command = args.subject + ';' + args.body
+
+    print('Sending to pipe:', command)
+
+    with open(pipe_path, 'w') as pipe:
+        pipe.write(command)
+
+    print('Done!')

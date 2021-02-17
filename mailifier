@@ -1,0 +1,160 @@
+#!/usr/bin/env python3
+
+import argparse
+import signal
+import threading
+import os
+import configparser
+import traceback
+import smtplib
+from email.mime.text import MIMEText
+
+class Mailifier:
+	def __init__(self):
+		self.LOCK        = threading.Lock()
+		self.CONFIG      = configparser.ConfigParser()
+		self.PIPE_PATH   = None
+		self.SENDER_NAME = None
+		self.SMTP_SERVER = None
+		self.SMTP_PORT   = None
+		self.SMTP_MAIL   = None
+		self.SMTP_PWD    = None
+		self.SIGTERM_RECEIVED = False
+
+	def load_config(self, config_file_path):
+		print('Loading configuration from {} ...'.format(config_file_path))
+		try:
+			# Check if config file exists
+			if not os.path.exists(config_file_path):
+				raise FileNotFoundError
+
+			# Parse config file
+			self.CONFIG.read(config_file_path)
+
+			# Retrieve all parameters
+			self.PIPE_PATH   = self.CONFIG['SERVICE']['PIPE_PATH']
+			self.SENDER_NAME = self.CONFIG['SERVICE']['SENDER_NAME']
+			self.SMTP_SERVER = self.CONFIG['SMTP']['SERVER']
+			self.SMTP_PORT   = self.CONFIG.getint('SMTP', 'PORT')
+			self.SMTP_MAIL   = self.CONFIG['SMTP']['MAIL']
+			self.SMTP_PWD    = self.CONFIG['SMTP']['PASSWORD']
+			return True
+		except FileNotFoundError:
+			print('ERROR: config file does not exist: {}'.format(config_file_path))
+			traceback.print_exc()
+		except Exception as e:
+			print('ERROR: invalid config file: {}'.format(config_file_path))
+			traceback.print_exc()
+		return False
+
+	def start_daemon(self, config_file_path):
+		print('Starting daemon ...')
+
+		# Read config file
+		success = self.load_config(config_file_path)
+		if not success:
+			exit(1)
+
+		# Create pipe if it does not exist
+		if not os.path.exists(self.PIPE_PATH):
+			print('Creating named pipe at {} ...'.format(self.PIPE_PATH))
+			os.mkfifo(self.PIPE_PATH)
+			# Manually set access mode since mkfifo's mode does not work properly
+			# 0o622: User: R/W, Group: W, Others: W
+			os.chmod(self.PIPE_PATH, 0o622)
+		else:
+			print('ERROR: named pipe at {} already exists'.format(self.PIPE_PATH))
+			exit(1)
+
+		# Initialize handler for SIGTERM signal
+		print('Registerin SIGTERM handler ...')
+		signal.signal(signal.SIGTERM, self.SIGTERM_handler)
+
+		# Create and start daemon thread that handles pipe reads, data parsing and e-mail sending
+		daemon_thread = threading.Thread(target=self.daemon_thread_entry, daemon=True)
+		daemon_thread.start()
+
+		# Pause and wait for signal
+		signal.pause()
+
+	def SIGTERM_handler(self, signum, stack_frame):
+		# Check if SIGTERM was already received once
+		if self.SIGTERM_RECEIVED:
+			return
+		self.SIGTERM_RECEIVED = True
+		print('SIGTERM signal received')
+		if self.LOCK.locked():
+			print('Lock currently unavailable, waiting ...')
+		# Acquire lock so that any incoming writes to the pipe will be ignored
+		self.LOCK.acquire()
+		print('SIGTERM Lock acquired')
+		print('Deleting pipe ... ')
+		os.remove(self.PIPE_PATH)
+		print('Done')
+		self.LOCK.release()
+		print('SIGTERM Lock released')
+
+	def daemon_thread_entry(self):
+		while True:
+			# Read data from pipe.
+			# If method returns, lock has also been acquired
+			notification_data = self.read_pipe()
+
+			# Interpret data
+			semicolon_count = notification_data.count(';')
+			if semicolon_count != 1:
+				print('WARNING: Invalid data, skipping')
+				self.LOCK.release()
+				print('daemon_thread_entry: LOCK released')
+				continue
+			notification_data_split = notification_data.split(';')
+
+			# Send notifcation / mail
+			self.send_mail(notification_data_split[0], notification_data_split[1])
+
+			# Release lock acquired by read_pipe()
+			self.LOCK.release()
+			print('daemon_thread_entry: LOCK released')
+
+	def read_pipe(self):
+		total_data = ''
+		# Open will block until data has arrived at the pipe
+		with open(self.PIPE_PATH, 'r') as pipe:
+			print('read_pipe: pipe opened')
+			# Acquire lock to complete the current notification
+			self.LOCK.acquire()
+			print('read_pipe: LOCK acquired')
+			while True:
+				current_data = pipe.read()
+				if len(current_data) == 0:
+					break
+				else:
+					total_data = total_data + current_data
+		print('read_pipe read: "{}"'.format(total_data))
+		return total_data
+
+	def send_mail(self, subject, body):
+		print('send_mail Subject: {}'.format(subject))
+		print('send_mail Body   : {}'.format(body))
+
+		mail = MIMEText(body)
+		mail['From']    = '{} <{}>'.format(self.SENDER_NAME, self.SMTP_MAIL)
+		# TODO: Make receiver dynmic (config?)
+		mail['To']      = 'rlink@gmx.at'
+		mail['Subject'] = subject
+
+		with smtplib.SMTP(self.SMTP_SERVER, self.SMTP_PORT) as server:
+			server.starttls()
+			server.login(self.SMTP_MAIL, self.SMTP_PWD)
+			server.send_message(mail)
+			print('send_mail: E-Mail sent')
+
+if __name__ == '__main__':
+	# Parse comannd line arguments
+	parser = argparse.ArgumentParser()
+	parser.add_argument('CONFIG_FILE_PATH', help='Path to the Mailifier configuration file')
+	args = parser.parse_args()
+
+	# Start Mailifier
+	mailifier = Mailifier()
+	mailifier.start_daemon(args.CONFIG_FILE_PATH)
