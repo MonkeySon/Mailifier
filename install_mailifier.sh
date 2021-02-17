@@ -26,7 +26,9 @@ echo "Done"
 
 echo "Installing executables"
 cp mailifier /usr/sbin/
+chmod +x /usr/sbin/mailifier
 cp mailifier_notify /usr/bin/
+chmod +x /usr/bin/mailifier_notify
 echo "Done"
 
 echo "Installing service"
