@@ -37,6 +37,14 @@ After that, restart the service with `sudo systemctl restart mailifier.service`
 
 Other processes can send a notification mail to a user by either writing to the named pipe defined in `/etc/mailifier/mailifier.conf` (default: `/var/run/mailifier`) in the format `MAIL_SUBJECT;MAIL_TEXT_BODY` or by using the convenience executable `mailifier_notify`.
 
-Example:
+### General Example
 
 `mailifier_notify -s "Subject of notification mail" -b "This is a example text body for a notification mail."`
+
+### Bash script example
+
+```
+if [[ -x `which mailifier_notify` ]]; then
+    mailifier_notify -s "Subject" -b "Body"
+fi
+```
