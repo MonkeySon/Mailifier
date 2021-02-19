@@ -15,6 +15,7 @@ class Mailifier:
 		self.CONFIG      = configparser.ConfigParser()
 		self.PIPE_PATH   = None
 		self.SENDER_NAME = None
+		self.RECEIVERS   = None
 		self.SMTP_SERVER = None
 		self.SMTP_PORT   = None
 		self.SMTP_MAIL   = None
@@ -34,6 +35,7 @@ class Mailifier:
 			# Retrieve all parameters
 			self.PIPE_PATH   = self.CONFIG['SERVICE']['PIPE_PATH']
 			self.SENDER_NAME = self.CONFIG['SERVICE']['SENDER_NAME']
+			self.RECEIVERS   = self.CONFIG['SERVICE']['RECEIVERS'].split(',')
 			self.SMTP_SERVER = self.CONFIG['SMTP']['SERVER']
 			self.SMTP_PORT   = self.CONFIG.getint('SMTP', 'PORT')
 			self.SMTP_MAIL   = self.CONFIG['SMTP']['MAIL']
@@ -139,15 +141,15 @@ class Mailifier:
 
 		mail = MIMEText(body)
 		mail['From']    = '{} <{}>'.format(self.SENDER_NAME, self.SMTP_MAIL)
-		# TODO: Make receiver dynmic (config?)
-		mail['To']      = 'rlink@gmx.at'
 		mail['Subject'] = subject
 
 		with smtplib.SMTP(self.SMTP_SERVER, self.SMTP_PORT) as server:
 			server.starttls()
 			server.login(self.SMTP_MAIL, self.SMTP_PWD)
-			server.send_message(mail)
-			print('send_mail: E-Mail sent')
+			for receiver in self.RECEIVERS:
+				mail['To'] = receiver
+				server.send_message(mail)
+				print('send_mail: E-Mail sent to {}'.format(receiver))
 
 if __name__ == '__main__':
 	# Parse comannd line arguments
