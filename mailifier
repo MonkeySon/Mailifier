@@ -35,7 +35,7 @@ class Mailifier:
 			# Retrieve all parameters
 			self.PIPE_PATH   = self.CONFIG['SERVICE']['PIPE_PATH']
 			self.SENDER_NAME = self.CONFIG['SERVICE']['SENDER_NAME']
-			self.RECEIVERS   = self.CONFIG['SERVICE']['RECEIVERS'].split(',')
+			self.RECEIVERS   = self.CONFIG['SERVICE']['RECEIVERS']
 			self.SMTP_SERVER = self.CONFIG['SMTP']['SERVER']
 			self.SMTP_PORT   = self.CONFIG.getint('SMTP', 'PORT')
 			self.SMTP_MAIL   = self.CONFIG['SMTP']['MAIL']
@@ -141,15 +141,14 @@ class Mailifier:
 
 		mail = MIMEText(body)
 		mail['From']    = '{} <{}>'.format(self.SENDER_NAME, self.SMTP_MAIL)
+		mail['To']      = self.RECEIVERS
 		mail['Subject'] = subject
 
 		with smtplib.SMTP(self.SMTP_SERVER, self.SMTP_PORT) as server:
 			server.starttls()
 			server.login(self.SMTP_MAIL, self.SMTP_PWD)
-			for receiver in self.RECEIVERS:
-				mail['To'] = receiver
-				server.send_message(mail)
-				print('send_mail: E-Mail sent to {}'.format(receiver))
+			server.send_message(mail)
+			print('send_mail: E-Mail sent to receiver(s): {}'.format(self.RECEIVERS.split(',')))
 
 if __name__ == '__main__':
 	# Parse comannd line arguments
