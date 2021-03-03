@@ -8,7 +8,7 @@ import stat
 DEFAULT_CONFIG_PATH = '/etc/mailifier/mailifier.conf'
 
 if __name__ == '__main__':
-	# Parse comannd line arguments
+    # Parse command line arguments
     parser = argparse.ArgumentParser()
     parser.add_argument('-c', '--config', help='Path to the Mailifier configuration file (default: ' + DEFAULT_CONFIG_PATH + ')')
     parser.add_argument('-s', '--subject', help='Subject of the notification mail', required=True)
@@ -36,6 +36,18 @@ if __name__ == '__main__':
     if not os.path.exists(pipe_path) or not stat.S_ISFIFO(os.stat(pipe_path).st_mode):
         print('ERROR: pipe does not exist or is not of type pipe!')
         exit(1)
+
+    if args.subject.find(';') != -1:
+      print('WARNING: Subject contains semicolons. Will be replaced with colons.')
+      args.subject = args.subject.replace(';', ':')
+
+    if args.body.find(';') != -1:
+      print('WARNING: Body contains semicolons. Will be replaced with colons.')
+      args.body = args.body.replace(';', ':')
+
+    if args.body.find('\\n') != -1:
+      print('WARNING: Body contains the character sequences "\\n". Will be replaced with newlines.')
+      args.body = args.body.replace('\\n', '\n')
 
     command = args.subject + ';' + args.body
 
