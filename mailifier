@@ -7,6 +7,7 @@ import os
 import configparser
 import traceback
 import smtplib
+from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 
 class Mailifier:
@@ -139,10 +140,17 @@ class Mailifier:
 		print('send_mail Subject: {}'.format(subject))
 		print('send_mail Body   : {}'.format(body))
 
-		mail = MIMEText(body)
+		mail = MIMEMultipart('alternative')
 		mail['From']    = '{} <{}>'.format(self.SENDER_NAME, self.SMTP_MAIL)
 		mail['To']      = self.RECEIVERS
 		mail['Subject'] = subject
+
+		if body.startswith('<html>'):
+			print('send_mail Type: HTML')
+			mail.attach(MIMEText(body, 'html'))
+		else:
+			print('send_mail Type: plain text')
+			mail.attach(MIMEText(body, 'plain'))
 
 		with smtplib.SMTP(self.SMTP_SERVER, self.SMTP_PORT) as server:
 			server.starttls()
