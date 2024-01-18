@@ -7,7 +7,7 @@ Linux service that allows other applications to send notifications to a client a
 Clone repository, change to directory, make installer executable and execute installer:
 
 ```
-git clone https://monkeyson.dyn.nwrk.biz/git/MonkeySon/mailifier.git
+git clone https://github.com/MonkeySon/Mailifier.git
 cd mailifier
 chmod +x install_mailifier.sh
 sudo ./install_mailifier.sh
@@ -23,12 +23,15 @@ Following settings are available:
 [SERVICE]
 PIPE_PATH   = /var/run/mailifier  # Path to the named pipe that will be created for IPC
 SENDER_NAME = Mailifier           # Sender name used by the notification E-Mail
+RECEIVERS        = name1@mail.com,name2@mail.com
+RETRY_COUNT      = 10             # Number of retrys after sending an E-Mail failed
+RETRY_TIME_LIMIT = 60             # Maximum wait time before retry (starts with 1 second and doubles every retry)
 
 [SMTP]
 SERVER   = smtp.mail.com          # SMTP server address of your provider
 PORT     = 587                    # SMTP server port of your provider
 MAIL     = name@mail.com          # SMTP mail address for login and sender address
-PASSWORD = s3c3tp455w0rd          # SMTP password for login
+PASSWORD = s3cr3tp455w0rd         # SMTP password for login
 ```
 
 After that, restart the service with `sudo systemctl restart mailifier.service`
