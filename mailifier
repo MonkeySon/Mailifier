@@ -4,6 +4,7 @@ import argparse
 import signal
 import threading
 import os
+import time
 import configparser
 import traceback
 import smtplib
@@ -12,15 +13,17 @@ from email.mime.text import MIMEText
 
 class Mailifier:
 	def __init__(self):
-		self.LOCK        = threading.Lock()
-		self.CONFIG      = configparser.ConfigParser()
-		self.PIPE_PATH   = None
-		self.SENDER_NAME = None
-		self.RECEIVERS   = None
-		self.SMTP_SERVER = None
-		self.SMTP_PORT   = None
-		self.SMTP_MAIL   = None
-		self.SMTP_PWD    = None
+		self.LOCK             = threading.Lock()
+		self.CONFIG           = configparser.ConfigParser()
+		self.PIPE_PATH        = None
+		self.SENDER_NAME      = None
+		self.RECEIVERS        = None
+		self.RETRY_COUNT      = None
+		self.RETRY_TIME_LIMIT = None
+		self.SMTP_SERVER      = None
+		self.SMTP_PORT        = None
+		self.SMTP_MAIL        = None
+		self.SMTP_PWD         = None
 		self.SIGTERM_RECEIVED = False
 
 	def load_config(self, config_file_path):
@@ -34,13 +37,15 @@ class Mailifier:
 			self.CONFIG.read(config_file_path)
 
 			# Retrieve all parameters
-			self.PIPE_PATH   = self.CONFIG['SERVICE']['PIPE_PATH']
-			self.SENDER_NAME = self.CONFIG['SERVICE']['SENDER_NAME']
-			self.RECEIVERS   = self.CONFIG['SERVICE']['RECEIVERS']
-			self.SMTP_SERVER = self.CONFIG['SMTP']['SERVER']
-			self.SMTP_PORT   = self.CONFIG.getint('SMTP', 'PORT')
-			self.SMTP_MAIL   = self.CONFIG['SMTP']['MAIL']
-			self.SMTP_PWD    = self.CONFIG['SMTP']['PASSWORD']
+			self.PIPE_PATH        = self.CONFIG['SERVICE']['PIPE_PATH']
+			self.SENDER_NAME      = self.CONFIG['SERVICE']['SENDER_NAME']
+			self.RECEIVERS        = self.CONFIG['SERVICE']['RECEIVERS']
+			self.RETRY_COUNT      = self.CONFIG.getint('SERVICE', 'RETRY_COUNT')
+			self.RETRY_TIME_LIMIT = self.CONFIG.getint('SERVICE', 'RETRY_TIME_LIMIT')
+			self.SMTP_SERVER      = self.CONFIG['SMTP']['SERVER']
+			self.SMTP_PORT        = self.CONFIG.getint('SMTP', 'PORT')
+			self.SMTP_MAIL        = self.CONFIG['SMTP']['MAIL']
+			self.SMTP_PWD         = self.CONFIG['SMTP']['PASSWORD']
 			return True
 		except FileNotFoundError:
 			print('ERROR: config file does not exist: {}'.format(config_file_path))
@@ -152,11 +157,20 @@ class Mailifier:
 			print('send_mail Type: plain text')
 			mail.attach(MIMEText(body, 'plain'))
 
-		with smtplib.SMTP(self.SMTP_SERVER, self.SMTP_PORT) as server:
-			server.starttls()
-			server.login(self.SMTP_MAIL, self.SMTP_PWD)
-			server.send_message(mail)
-			print('send_mail: E-Mail sent to receiver(s): {}'.format(self.RECEIVERS.split(',')))
+		retry_wait_time = 1
+		for _ in range(self.RETRY_COUNT):
+			try:
+				with smtplib.SMTP(self.SMTP_SERVER, self.SMTP_PORT) as server:
+					server.starttls()
+					server.login(self.SMTP_MAIL, self.SMTP_PWD)
+					server.send_message(mail)
+					print('send_mail: E-Mail sent to receiver(s): {}'.format(self.RECEIVERS.split(',')))
+				return
+			except Exception as e:
+				print('Exception while sending mail:', e)
+				retry_wait_time = min(retry_wait_time * 2, self.RETRY_TIME_LIMIT)
+				print(f'Retrying after {retry_wait_time} seconds ...')
+				time.sleep(retry_wait_time)
 
 if __name__ == '__main__':
 	# Parse comannd line arguments
